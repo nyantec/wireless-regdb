@@ -447,7 +447,7 @@ impl Flags {
         let mut flags = 0;
         for v in &self.0 {
             match v.as_str() {
-                "NO-OFDM" => flags |= 1 << 0,
+                "NO-OFDM" => flags |= 1, //<< 0,
                 "NO-OUTDOOR" => flags |= 1 << 1,
                 "DFS" => flags |= 1 << 2,
                 "NO-IR" => flags |= 1 << 3,
