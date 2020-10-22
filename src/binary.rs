@@ -9,6 +9,7 @@ use anyhow::{anyhow, bail, Result};
 const MAGIC: u32 = 0x52474442;
 const VERSION: u32 = 20;
 
+/// Binary representation of the regulatory Database
 #[derive(Debug)]
 pub struct Binary {
     // MAGIC (4)
@@ -22,6 +23,11 @@ pub struct Binary {
 }
 
 impl Binary {
+    /// Create a Binary representation of the Regulatory DB
+    ///
+    /// # Arguments
+    ///
+    /// * `regdb` - reference of a regulatory database
     pub fn from_regdb(regdb: &super::RegDB) -> Result<Self> {
         let mut countries: Vec<BinaryCountry> = Vec::new();
         let mut wmmdbs: Vec<BinaryWmmDB> = Vec::new();
@@ -132,6 +138,11 @@ impl Binary {
         result
     }
 
+    /// Write database to file
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - path of the file
     pub fn write_file<P: AsRef<std::path::Path>>(&self, path: P) -> Result<()> {
         let file = OpenOptions::new()
             .write(true)
@@ -142,6 +153,11 @@ impl Binary {
         self.write(file)
     }
 
+    /// Write database to Writer
+    ///
+    /// # Arguments
+    ///
+    /// * `writer` - `std::io::Writer` to write database to
     pub fn write<T: std::io::Write>(&self, mut writer: T) -> Result<()> {
         writer.write_u32::<BigEndian>(MAGIC)?;
         writer.write_u32::<BigEndian>(VERSION)?;
@@ -262,7 +278,7 @@ impl BinaryWmmDB {
 }
 
 #[derive(Debug, Default)]
-pub struct BinaryRegRule {
+struct BinaryRegRule {
     rule_len: u8,
     flags: u8,
     power: u16,
@@ -349,7 +365,7 @@ impl BinaryRegRule {
 }
 
 #[derive(Debug)]
-pub struct BinaryCollection {
+struct BinaryCollection {
     len: u8,
     dfs: super::DfsRegion,
     rules: Vec<u16>,

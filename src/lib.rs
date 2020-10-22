@@ -1,27 +1,53 @@
+//!
+//! Read a wireless regdb, and convert it to a binary firmware file.
+//!
+//! Inspired by the python code from
+//! [kernel.googlesource.com/pub/scm/linux/kernel/git/sforshee/wireless-regdb](https://kernel.googlesource.com/pub/scm/linux/kernel/git/sforshee/wireless-regdb/+/refs/heads/master/)
+//!
+//! # Example
+//! ```
+//! let lexer = wireless_regdb::lexer::TokType::parse("db.txt").unwrap();
+//! let db = wireless_regdb::RegDB::from_lexer(lexer).unwrap();
+//! let bin_db = wireless_regdb::Binary::from_regdb(&db).unwrap();
+//! bin_db.write_file("regulatory.db").unwrap();
+//! ```
+//!
+
 use std::collections::HashMap;
 
 use std::iter::Peekable;
 use std::slice::Iter;
 
-pub mod binary;
+pub(crate) mod binary;
 pub mod lexer;
 
-use crate::lexer::TokType;
+pub use crate::binary::Binary;
+pub use crate::lexer::TokType;
 
 use anyhow::{anyhow, bail, Result};
 use std::convert::TryFrom;
 
+/// The regulatory database with wmmrules and countries
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct RegDB {
+    /// Regulatory rules for regions.
+    ///
+    /// *ETSI* for example
     pub wmm_rules: HashMap<String, WmmRule>,
+    /// Contries in the database. The key usese the 2 digit alpha representation
     pub countries: HashMap<String, Country>,
 }
 
 impl RegDB {
-    pub fn from_lexer(lex: Vec<TokType>) -> Result<Self> {
+    /// Create a regulatory database from a TokenStream(`Vec<lexer::TokType>`)
+    ///
+    /// # Arguments
+    ///
+    /// * `lexer` - Vector of tokens representing the database txt format
+    pub fn from_lexer(lexer: Vec<TokType>) -> Result<Self> {
         let mut ret = Self::default();
 
-        let mut it = lex.iter().peekable();
+        let mut it = lexer.iter().peekable();
 
         while let Some(&v) = it.peek() {
             match &v {
@@ -73,6 +99,7 @@ const WMMRULE_ITEMS: [&str; 8] = [
     "vo_c", "vi_c", "be_c", "bk_c", "vo_ap", "vi_ap", "be_ap", "bk_ap",
 ];
 
+/// Regulatory rules for a region.
 #[derive(Debug, Default, PartialEq, Eq)]
 #[allow(non_snake_case)]
 pub struct WmmRule {
@@ -87,7 +114,7 @@ pub struct WmmRule {
 }
 
 impl WmmRule {
-    pub fn from_lexer(it: &mut Peekable<Iter<TokType>>) -> Result<Self> {
+    fn from_lexer(it: &mut Peekable<Iter<TokType>>) -> Result<Self> {
         let mut result = Self::default();
         let mut set = Vec::new();
 
@@ -167,6 +194,9 @@ impl WmmRule {
     }
 }
 
+/// Item of a [`WmmRule`]
+///
+/// [`WmmRule`]: ./struct.WmmRule.html
 #[allow(non_snake_case)]
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct WmmRuleItem {
@@ -178,6 +208,7 @@ pub struct WmmRuleItem {
 
 const WMMRULEITEM_ITEMS: [&str; 4] = ["cw_min", "cw_max", "aifsn", "cot"];
 
+/// Contry definiton in the Regulatory Database
 #[derive(Debug, PartialEq, Eq, Default)]
 pub struct Country {
     pub frequencies: HashMap<(String, String), FrequencyBand>,
@@ -185,7 +216,7 @@ pub struct Country {
 }
 
 impl Country {
-    pub fn from_lexer(
+    fn from_lexer(
         name: &str,
         it: &mut Peekable<Iter<TokType>>,
         dfs: Option<String>,
@@ -325,8 +356,9 @@ impl Country {
     }
 }
 
-// It can not be orderd, but Collection needs it
+/// Dfs region Definiton
 #[repr(u8)]
+// It can not be orderd, but Collection needs it
 #[derive(Debug, PartialEq, Eq, Copy, Clone, Ord, PartialOrd)]
 pub enum DfsRegion {
     None = 0,
@@ -354,14 +386,15 @@ impl Default for DfsRegion {
     }
 }
 
+/// Freqency entry
 #[derive(Debug)]
 pub struct FrequencyBand {
-    freqs: (f64, f64),
-    size: f64,
-    power: f64,
-    power_unit: Option<String>,
-    flags: Flags,            // TODO: rename?
-    wmmrule: Option<String>, // can only have one wwmrule?
+    pub freqs: (f64, f64),
+    pub size: f64,
+    pub power: f64,
+    pub power_unit: Option<String>,
+    pub flags: Flags,            // TODO: rename?
+    pub wmmrule: Option<String>, // can only have one wwmrule?
 }
 
 impl FrequencyBand {
@@ -439,6 +472,7 @@ impl PartialEq for FrequencyBand {
     }
 }
 
+/// Flags for a Freqency to regulato special behavior
 #[derive(Debug, PartialEq, Eq, Default)]
 pub struct Flags(Vec<String>);
 
