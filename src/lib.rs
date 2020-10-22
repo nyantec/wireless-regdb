@@ -633,13 +633,13 @@ wmmrule ETSI:
 
     #[test]
     fn write_db() {
-        let db = include_str!("./tests/db.txt");
+        let db = include_str!("./../db.txt");
 
         let lexer = TokType::parse_str(db).unwrap();
         let db = RegDB::from_lexer(lexer).unwrap();
 
         let db = super::binary::Binary::from_regdb(&db).unwrap();
 
-        db.write_file("/tmp/db.full").unwrap(); // TODO: /dev/null?
+        db.write_file("/dev/null").unwrap(); // TODO: /dev/null?
     }
 }

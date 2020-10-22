@@ -14,6 +14,12 @@ pub enum TokType {
 }
 
 impl TokType {
+    pub fn parse<P: AsRef<std::path::Path>>(file: P) -> Result<Vec<Self>> {
+        let db = std::fs::read_to_string(file)?;
+
+        Self::parse_str(&db)
+    }
+
     pub fn parse_str(db: &str) -> Result<Vec<Self>> {
         let mut result = Vec::new();
 

@@ -10,7 +10,8 @@ categories = [ "internationalization", "os::linux-apis", "parsing" ]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-# TODO: example for generating a regdb
+[[example]]
+name = "generate-regdb"
 
 [dependencies]
 anyhow = "*"
