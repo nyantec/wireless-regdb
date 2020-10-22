@@ -61,7 +61,7 @@ impl RegDB {
                     ret.countries
                         .insert(name.clone(), Country::from_lexer(&name, &mut it, dfs)?);
                 }
-                _ => todo!(),
+                v => bail!("not expected for a regulatory db: {:?}", v),
             }
         }
 
@@ -143,7 +143,7 @@ impl WmmRule {
                                     _ => break,
                                 }
                             }
-                            _ => todo!(),
+                            v => bail!("not expected for a wmmrule item: {:?}", v),
                         }
                     }
 
@@ -153,7 +153,7 @@ impl WmmRule {
                         }
                     }
                 }
-                _ => todo!(),
+                v => bail!("not expected for a wmmrule: {:?}", v),
             }
         }
 
@@ -318,7 +318,7 @@ impl Country {
         let from = from.parse::<f64>()?;
         let to = to.parse::<f64>()?;
         if to <= from {
-            todo!("error message");
+            bail!("freqency in wrong order {} < {}", to, from);
         }
 
         Ok((from, to))
@@ -406,7 +406,7 @@ impl Ord for FrequencyBand {
                                     }
                                 }
                                 Some(v) => v,
-                                None => unreachable!(),
+                                None => unreachable!(), // It never should be NAN, so panic if it would be
                             }
                         }
                         Some(v) => v,

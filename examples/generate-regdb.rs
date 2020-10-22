@@ -1,6 +1,6 @@
 use std::env::args;
 
-use wireless_regdb::{RegDB, lexer::TokType, binary::Binary};
+use wireless_regdb::{binary::Binary, lexer::TokType, RegDB};
 
 fn main() {
     if args().len() != 3 {
