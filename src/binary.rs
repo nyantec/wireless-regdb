@@ -112,9 +112,9 @@ impl Binary {
         })
     }
 
-    fn create_collections<'a>(
-        countries: &'a HashMap<String, super::Country>,
-    ) -> Vec<(Vec<&'a super::FrequencyBand>, super::DfsRegion)> {
+    fn create_collections(
+        countries: &HashMap<String, super::Country>,
+    ) -> Vec<(Vec<&super::FrequencyBand>, super::DfsRegion)> {
         let mut result = Vec::new();
 
         for c in countries.values() {
