@@ -7,6 +7,9 @@ repository = "https://github.com/nyantec/wireless-regdb"
 license = "MirOS"
 keywords = [ "linux", "wireless", "wireless-regulatory" ]
 categories = [ "internationalization", "os::linux-apis", "parsing" ]
+description = "create a linux wireless regulatory db firmware"
+homepage = "https://github.com/nyantec/wireless-regdb"
+readme = "README.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -14,5 +17,5 @@ categories = [ "internationalization", "os::linux-apis", "parsing" ]
 name = "generate-regdb"
 
 [dependencies]
-anyhow = "*"
-byteorder = "*"
+anyhow = "1"
+byteorder = "1.3"
