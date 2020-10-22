@@ -1,0 +1,17 @@
+[package]
+name = "wireless-regdb"
+version = "0.1.0"
+authors = ["Finn Behrens <me@kloenk.de>"]
+edition = "2018"
+repository = "https://github.com/nyantec/wireless-regdb"
+license = "MirOS"
+keywords = [ "linux", "wireless", "wireless-regulatory" ]
+categories = [ "internationalization", "os::linux-apis", "parsing" ]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+# TODO: example for generating a regdb
+
+[dependencies]
+anyhow = "*"
+byteorder = "*"
