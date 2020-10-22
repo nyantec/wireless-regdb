@@ -1,8 +1,13 @@
+//! Lexer to create a TokenStream(`Vec<lexer::TokType>`) from a string represeting the database in txt format
+
 use anyhow::{bail, Result};
 
+/// Token Representing content from the txt file format of the binary database
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TokType {
+    /// String Token
     String(String),
+    /// Integer represented as usize
     Int(usize),
     Colon,  // :
     Equals, // =
@@ -10,16 +15,33 @@ pub enum TokType {
     Comma,  // ,
     LParen, // (
     RParen, // )
-    At,     // @
+    /// Single `@` Token
+    At, // @
 }
 
 impl TokType {
+    /// Parse a file from filesystem to a Vec of Tokens
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - path to db.txt on disk
     pub fn parse<P: AsRef<std::path::Path>>(file: P) -> Result<Vec<Self>> {
         let db = std::fs::read_to_string(file)?;
 
         Self::parse_str(&db)
     }
 
+    /// Parse a string to a Vec of Tokens
+    ///
+    /// # Arguments
+    ///
+    /// * `db` - string of the database
+    ///
+    /// # Example
+    /// ```
+    /// use wireless_regdb::TokType;
+    /// let tokens = TokType::parse_str("wmmrule: ETSI").unwrap();
+    /// ```
     pub fn parse_str(db: &str) -> Result<Vec<Self>> {
         let mut result = Vec::new();
 
@@ -100,12 +122,29 @@ impl TokType {
 
         Ok(result)
     }
+
+    /// Return the string of the token, if the token contains a string
+    ///
+    /// # Example
+    /// ```
+    /// use wireless_regdb::TokType;
+    /// let token = TokType::String("hello_world".to_string());
+    /// let content = token.get_string().unwrap();
+    /// ```
     pub fn get_string(&self) -> Result<String> {
         match &self {
             TokType::String(ret) => Ok(ret.to_string()),
             v => bail!("token is not a string: {:?}", v),
         }
     }
+    /// Return the usize of the token, if the token contains an integer
+    ///
+    /// # Example
+    /// ```
+    /// use wireless_regdb::TokType;
+    /// let token = TokType::Int(1337);
+    /// let content = token.get_int().unwrap();
+    /// ```
     pub fn get_int(&self) -> Result<usize> {
         match &self {
             TokType::Int(ret) => Ok(*ret),
