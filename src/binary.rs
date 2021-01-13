@@ -5,6 +5,9 @@ use byteorder::{BigEndian, WriteBytesExt};
 use std::fs::OpenOptions;
 
 use anyhow::{anyhow, bail, Result};
+#[cfg(feature = "sign")]
+use anyhow::Context;
+
 
 const MAGIC: u32 = 0x52474442;
 const VERSION: u32 = 20;
@@ -12,6 +15,231 @@ const VERSION: u32 = 20;
 /// Binary representation of the regulatory Database
 #[derive(Debug)]
 pub struct Binary {
+    data: Vec<u8>,
+
+    #[cfg(feature = "sign")]
+    signature: Option<Vec<u8>>,
+}
+
+impl Binary {
+    /// Create a Binary representation of the Regulatory DB
+    ///
+    /// # Arguments
+    ///
+    /// * `regdb` - reference of a regulatory database
+    pub fn from_regdb(regdb: &super::RegDB) -> Result<Self> {
+        let mut ret = Vec::new();
+        let data = BinaryWriter::from_regdb(regdb)?;
+        data.write(&mut ret)?;
+
+        Ok(Self {
+            data: ret,
+
+            #[cfg(feature = "sign")]
+            signature: None,
+        })
+    }
+
+    /// Load a binary repsesentation from data.
+    /// This is not checked if it is real database data
+    ///
+    /// # Arguments
+    ///
+    /// * `db` - binary data of the db
+    pub fn load_data(data: &[u8]) -> Self {
+        let mut data_vec = Vec::new();
+        data_vec.copy_from_slice(data);
+
+        Self {
+            data: data_vec,
+
+            #[cfg(feature = "sign")]
+            signature: None,
+        }
+    }
+
+    /// Load binary representation from file.
+    /// This is not checked if it is a real database data
+    ///
+    /// # Arguments
+    ///
+    /// * `db` - path to database
+    pub fn load<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
+        use std::io::Read;
+        let mut file = std::fs::File::open(&path)?;
+        let mut data = Vec::new();
+        file.read_to_end(&mut data)?;
+
+        Ok(Self::load_data(&data))
+    }
+
+    /// Write database to file `path`/regulatory.db
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - path to save files under
+    #[cfg(not(feature = "sign"))]
+    pub fn write_path<P: AsRef<std::path::Path>>(&self, path: P) -> Result<()> {
+        let path: &std::path::Path = path.as_ref();
+        self.write_file(&path.join("regulatory.db"))?;
+
+        Ok(())
+    }
+
+    /// Write database to file `path`/regulatory.db
+    /// and writes `path`/regulatory.db.p7s
+    /// if database is signed
+    ///
+    /// Use [write_file](#method.write_file) to only write the `regulatory.db`
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - path to save files under
+    #[cfg(feature = "sign")]
+    pub fn write_path<P: AsRef<std::path::Path>>(&self, path: P) -> Result<()> {
+        let path: &std::path::Path = path.as_ref();
+
+        // do signature first, to fail if not signed
+        self.write_signature_file(&path.join("regulatory.db.p7s"))?;
+
+        self.write_file(&path.join("regulatory.db"))?;
+
+        Ok(())
+    }
+
+    /// Write database to file
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - path of the file
+    pub fn write_file<P: AsRef<std::path::Path>>(&self, path: P) -> Result<()> {
+        let file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(path)?;
+
+        self.write(file)
+    }
+
+    /// Write database to Writer
+    ///
+    /// # Arguments
+    ///
+    /// * `writer` - `std::io::Writer` to write database to
+    pub fn write<T: std::io::Write>(&self, mut writer: T) -> Result<()> {
+        writer.write_all(&self.data)?;
+
+        Ok(())
+    }
+
+    /// Sign database with given keys
+    #[cfg(feature = "sign")]
+    pub fn sign<T>(
+        &mut self,
+        signcert: &openssl::x509::X509Ref,
+        pkey: &openssl::pkey::PKeyRef<T>,
+    ) -> Result<()>
+    where
+        T: openssl::pkey::HasPrivate,
+    {
+        use openssl::cms;
+        let mut flags = cms::CMSOptions::empty();
+        flags.set(cms::CMSOptions::BINARY, true);
+        flags.set(cms::CMSOptions::NOSMIMECAP, true);
+
+        let signature =
+            cms::CmsContentInfo::sign(Some(signcert), Some(pkey), None, Some(&self.data), flags)
+                .context("failed to sign db")?;
+
+        let signature = signature.to_der().context("could not create der format")?;
+
+        self.signature = Some(signature);
+
+        Ok(())
+    }
+
+    /// Sign database with keys under the specific path
+    #[cfg(feature = "sign")]
+    pub fn sign_from_path<T: AsRef<std::path::Path>, P: AsRef<std::path::Path>>(
+        &mut self,
+        signcert: T,
+        pkey: P,
+        passphrase: &[u8]
+    ) -> Result<()> {
+        use std::io::Read;
+        let mut file = std::fs::File::open(&signcert)?;
+        let mut signcert = Vec::new();
+        file.read_to_end(&mut signcert)?;
+
+        let signcert = openssl::x509::X509::from_pem(&signcert).context("could not read signcert")?;
+
+        let mut file = std::fs::File::open(&pkey)?;
+        let mut pkey = Vec::new();
+        file.read_to_end(&mut pkey)?;
+
+        let pkey = openssl::pkey::PKey::private_key_from_pem_passphrase(&pkey, passphrase).context("decrpyt pkey")?;
+
+        self.sign(&signcert, &pkey)
+    }
+
+    /// Write signature to file
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - path of the file
+    #[cfg(feature = "sign")]
+    pub fn write_signature_file<P: AsRef<std::path::Path>>(&self, path: P) -> Result<()> {
+        if self.signature.is_none() {
+            bail!("not signed");
+        }
+
+        let file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(path)?;
+
+        self.write_signature(file)
+    }
+
+    /// Write signature to Writer
+    ///
+    /// # Arguments
+    ///
+    /// * `writer` - `std::io::Writer` to write database to
+    #[cfg(feature = "sign")]
+    pub fn write_signature<T: std::io::Write>(&self, mut writer: T) -> Result<()> {
+        if self.signature.is_none() {
+            bail!("not signed");
+        }
+
+        writer.write_all(self.signature.as_ref().unwrap())?;
+
+        Ok(())
+    }
+
+    /// Check if Database has a signature
+    #[cfg(feature = "sign")]
+    pub fn has_signature(&self) -> bool{
+        self.signature.is_some()
+    }
+
+    // TODO: add function to check signature
+
+    pub fn get_data(&self) -> &[u8] {
+        &self.data
+    }
+
+    #[cfg(feature = "sign")]
+    pub fn get_signature(&self) -> Option<&Vec<u8>> {
+        self.signature.as_ref()
+    }
+}
+
+// Intermediat writer to create a vec u8
+#[derive(Debug)]
+struct BinaryWriter {
     // MAGIC (4)
     // Version (4)
     countries: Vec<BinaryCountry>,
@@ -22,13 +250,8 @@ pub struct Binary {
     collections: Vec<BinaryCollection>,
 }
 
-impl Binary {
-    /// Create a Binary representation of the Regulatory DB
-    ///
-    /// # Arguments
-    ///
-    /// * `regdb` - reference of a regulatory database
-    pub fn from_regdb(regdb: &super::RegDB) -> Result<Self> {
+impl BinaryWriter {
+    fn from_regdb(regdb: &super::RegDB) -> Result<Self> {
         let mut countries: Vec<BinaryCountry> = Vec::new();
         let mut wmmdbs: Vec<BinaryWmmDB> = Vec::new();
         let mut wmmdb_pos: HashMap<String, usize> = HashMap::with_capacity(regdb.wmm_rules.len());
@@ -138,27 +361,7 @@ impl Binary {
         result
     }
 
-    /// Write database to file
-    ///
-    /// # Arguments
-    ///
-    /// * `path` - path of the file
-    pub fn write_file<P: AsRef<std::path::Path>>(&self, path: P) -> Result<()> {
-        let file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(path)?;
-
-        self.write(file)
-    }
-
-    /// Write database to Writer
-    ///
-    /// # Arguments
-    ///
-    /// * `writer` - `std::io::Writer` to write database to
-    pub fn write<T: std::io::Write>(&self, mut writer: T) -> Result<()> {
+    fn write<T: std::io::Write>(&self, mut writer: T) -> Result<()> {
         writer.write_u32::<BigEndian>(MAGIC)?;
         writer.write_u32::<BigEndian>(VERSION)?;
 
@@ -185,6 +388,18 @@ impl Binary {
             .collect::<Result<()>>()?;
 
         Ok(())
+    }
+}
+
+impl std::convert::TryInto<Vec<u8>> for BinaryWriter {
+    type Error = anyhow::Error;
+
+    fn try_into(self) -> Result<Vec<u8>, Self::Error> {
+        let mut ret = Vec::new();
+
+        self.write(&mut ret)?;
+
+        Ok(ret)
     }
 }
 
@@ -410,15 +625,40 @@ impl BinaryCollection {
 mod test {
     use super::Binary;
     #[test]
+    #[ignore]
     fn write_empty_db() {
-        let db = Binary {
-            countries: Vec::new(),
-            wmmdbs: Vec::new(),
-            rules_db: Vec::new(),
-            collections: Vec::new(),
-        };
+        let db = crate::RegDB::new();
+        let db = Binary::from_regdb(&db).unwrap();
 
-        //use std::io::Cursor;
         db.write_file("/tmp/db.test").unwrap();
+    }
+
+    #[test]
+    #[cfg(feature = "sign")]
+    fn sign_db() {
+        let db = crate::RegDB::new();
+        let mut db = Binary::from_regdb(&db).unwrap();
+
+        let rsa_key = openssl::rsa::Rsa::generate(2048).unwrap();
+        let pkey = openssl::pkey::PKey::from_rsa(rsa_key).unwrap();
+
+        let mut certificate = openssl::x509::X509Builder::new().unwrap();
+        certificate.set_serial_number(&openssl::asn1::Asn1Integer::from_bn(&openssl::bn::BigNum::from_u32(0).unwrap()).unwrap()).unwrap();
+
+        let mut name = openssl::x509::X509Name::builder().unwrap();
+        name.append_entry_by_text("C", "DE").unwrap();
+        name.append_entry_by_text("CN", "nyantec GmbH").unwrap();
+        let name = name.build();
+        certificate.set_issuer_name(&name).unwrap();
+
+        certificate.set_pubkey(&pkey).unwrap();
+
+        certificate.sign(&pkey, openssl::hash::MessageDigest::md5()).unwrap();
+        let certificate = certificate.build();
+
+        db.sign(&certificate, &pkey).unwrap();
+
+        assert!(db.has_signature());
+        assert!(db.get_signature().unwrap().len() > 0);
     }
 }
