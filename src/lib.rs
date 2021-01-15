@@ -93,6 +93,14 @@ impl RegDB {
 
         Ok(ret)
     }
+
+    /// Create a new empty Regulatory DB
+    pub fn new() -> Self {
+        Self {
+            wmm_rules: HashMap::new(),
+            countries: HashMap::new(),
+        }
+    }
 }
 
 const WMMRULE_ITEMS: [&str; 8] = [
